@@ -1,0 +1,20 @@
+language: go
+
+# use containers which run faster and have cache
+sudo: false
+
+cache:
+  directories:
+    $GOPATH/src
+
+go:
+  - tip
+  - 1.7.x
+
+go_import_path: github.com/StudentRND/lgtm
+
+script:
+  - go build -v github.com/StudentRND/lgtm
+
+notifications:
+  email: false
