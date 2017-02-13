@@ -1,0 +1,31 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "h9EtLdks5ODcJVIA+j4qmrW2/mw=",
+			"path": "github.com/joho/godotenv",
+			"revision": "726cc8b906e3d31c70a9671c90a13716a8d3f50d",
+			"revisionTime": "2016-12-16T23:05:37Z"
+		},
+		{
+			"checksumSHA1": "UE4lhbPYYWEhqHXQk24OA73m5+8=",
+			"path": "github.com/joho/godotenv/autoload",
+			"revision": "726cc8b906e3d31c70a9671c90a13716a8d3f50d",
+			"revisionTime": "2016-12-16T23:05:37Z"
+		},
+		{
+			"checksumSHA1": "oNrSJkPTYsPtwH9/pUXOTIjVuks=",
+			"path": "github.com/nlopes/slack",
+			"revision": "6519657c021b7add19c4ef48220140cca0b1657b",
+			"revisionTime": "2017-02-11T11:26:27Z"
+		},
+		{
+			"checksumSHA1": "7EZyXN0EmZLgGxZxK01IJua4c8o=",
+			"path": "golang.org/x/net/websocket",
+			"revision": "61557ac0112b576429a0df080e1c2cef5dfbb642",
+			"revisionTime": "2017-01-26T11:54:58Z"
+		}
+	],
+	"rootPath": "github.com/StudentRND/lgtm"
+}
