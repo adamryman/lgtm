@@ -32,7 +32,6 @@ func Start() error {
 		<-c
 		lgtm.PostMessage("TERMINATED")
 		time.Sleep(time.Second)
-		os.Exit(0)
 	}()
 
 	for event := range lgtm.IncomingEvents {
