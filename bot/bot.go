@@ -5,15 +5,28 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
 
+	_ "github.com/joho/godotenv/autoload"
 	. "github.com/y0ssar1an/q"
 )
 
 const prPartyID = "C3YJF4GP5"
+const playgroundId = "C03LPQF0Y"
+
+var slackChannel = prPartyID
+
+func init() {
+	Q(os.Getenv("DEBUG"))
+	if len(os.Getenv("DEBUG")) > 0 {
+		slackChannel = playgroundId
+	}
+}
+
 const lgtmID = "<@U456ZSLSJ>"
 
 type LGTM struct {
@@ -25,6 +38,7 @@ type LGTM struct {
 }
 
 type WatchRepoEvent struct {
+	User  string
 	Owner string
 	Repo  string
 }
@@ -68,7 +82,9 @@ func Start(ctx context.Context, token string, options ...LGTMOption) (*LGTM, err
 func (lgtm LGTM) PostMessage(msg string) (timestamp string, err error) {
 	pmp := slack.NewPostMessageParameters()
 	pmp.AsUser = true
-	_, timestamp, err = lgtm.api.PostMessage(prPartyID, msg, pmp)
+	pmp.LinkNames = 1
+	pmp.EscapeText = false
+	_, timestamp, err = lgtm.api.PostMessage(slackChannel, msg, pmp)
 	return
 }
 
@@ -82,7 +98,7 @@ func (lgtm LGTM) PostMessage(msg string) (timestamp string, err error) {
 func (lgtm LGTM) ReactPullRequest(timestamp string) error {
 	pmp := slack.NewPostMessageParameters()
 	pmp.AsUser = true
-	itemref := slack.NewRefToMessage(prPartyID, timestamp)
+	itemref := slack.NewRefToMessage(slackChannel, timestamp)
 	return lgtm.api.AddReaction(lgtm.emoji, itemref)
 }
 
@@ -109,32 +125,38 @@ func (lgtm *LGTM) start(ctx context.Context, token string) {
 
 		case *slack.MessageEvent:
 			text := ev.Text
-			if strings.Contains(text, lgtmID) {
-				searchText := strings.ToLower(ev.Text)
-				Q(searchText)
-				watchRequest := strings.Split(searchText, " watch repo ")
+			if ev.Channel != slackChannel {
+				continue
+			}
+			if !strings.Contains(text, lgtmID) {
+				continue
+			}
+			searchText := strings.ToLower(ev.Text)
+			Q(searchText)
+			watchRequest := strings.Split(searchText, " watch repo ")
+			switch {
+			case len(watchRequest) > 1:
+				Q(ev.User)
 				Q(watchRequest)
-				if len(watchRequest) > 1 {
-					repoPart := watchRequest[len(watchRequest)-1]
-					Q(repoPart)
-					scanner := bufio.NewScanner(strings.NewReader(repoPart))
-					scanner.Split(bufio.ScanWords)
-					if !scanner.Scan() {
-						continue
-					}
-
-					repoText := scanner.Text()
-					ownerRepo := strings.Split(repoText, "/")
-					Q(repoText, ownerRepo)
-					if len(ownerRepo) < 2 {
-						continue
-					}
-					owner, repo := ownerRepo[0], ownerRepo[1]
-					Q(owner, repo)
-					lgtm.IncomingEvents <- WatchRepoEvent{Owner: owner, Repo: repo}
+				repoPart := watchRequest[len(watchRequest)-1]
+				Q(repoPart)
+				scanner := bufio.NewScanner(strings.NewReader(repoPart))
+				scanner.Split(bufio.ScanWords)
+				if !scanner.Scan() {
+					continue
 				}
 
+				repoText := scanner.Text()
+				ownerRepo := strings.Split(repoText, "/")
+				Q(repoText, ownerRepo)
+				if len(ownerRepo) < 2 {
+					continue
+				}
+				owner, repo := ownerRepo[0], ownerRepo[1]
+				Q(owner, repo)
+				lgtm.IncomingEvents <- WatchRepoEvent{User: ev.User, Owner: owner, Repo: repo}
 			}
+
 			fmt.Printf("Message: %v\n", ev)
 
 		case *slack.PresenceChangeEvent:
