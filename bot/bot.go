@@ -120,8 +120,6 @@ func (lgtm *LGTM) start(ctx context.Context, token string) {
 		case *slack.ConnectedEvent:
 			fmt.Println("Infos:", ev.Info)
 			fmt.Println("Connection counter:", ev.ConnectionCount)
-			// Replace #general with your Channel ID
-			//rtm.SendMessage(rtm.NewOutgoingMessage("Hello world!", prPartyID))
 
 		case *slack.MessageEvent:
 			text := ev.Text

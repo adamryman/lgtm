@@ -11,12 +11,16 @@ import (
 
 	"github.com/StudentRND/lgtm/bot"
 	"github.com/StudentRND/lgtm/github"
+	sql "github.com/StudentRND/lgtm/sqlite"
 
 	_ "github.com/joho/godotenv/autoload"
 	. "github.com/y0ssar1an/q"
 )
 
 func Start() error {
+	database, err := sql.Open(os.Getenv("SQLITE3"))
+	_ = database
+
 	slackToken := os.Getenv("SLACK_API_TOKEN")
 	githubToken := os.Getenv("GITHUB_TOKEN")
 	Q(githubToken)
@@ -37,7 +41,12 @@ func Start() error {
 			switch ev := event.(type) {
 			case bot.WatchRepoEvent:
 				lgtm.PostMessage(fmt.Sprintf("someday I will watch `%s` with owner `%s`, <@%s>", ev.Repo, ev.Owner, ev.User))
-				hook, err := github.WatchRepo(ctx, githubToken, ev.Owner, ev.Repo)
+				token, err := database.ReadUserAuth(ev.User)
+				if err != nil {
+					lgtm.PostMessage(fmt.Sprintf("You need to authenticate <@%s>. http://home.adamryman.com:5040/authenticate?slack_id=%s", ev.User, ev.User))
+					token = githubToken
+				}
+				hook, err := github.WatchRepo(ctx, token, ev.Owner, ev.Repo)
 				if err != nil {
 					fmt.Println(err)
 					Q(err)

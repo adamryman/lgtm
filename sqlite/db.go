@@ -1,17 +1,10 @@
-package main
+package sqlite
 
 import (
 	"database/sql"
-	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
-	. "github.com/y0ssar1an/q"
 )
-
-func main() {
-	fmt.Println("You can do anything!")
-	Q("Lets debug some shit")
-}
 
 func Open(conn string) (*Database, error) {
 	d, err := sql.Open("sqlite3", conn)
@@ -65,7 +58,7 @@ type Database struct {
 	db *sql.DB
 }
 
-func (d *Database) GetUserAuth(slackId string) (string, error) {
+func (d *Database) ReadUserAuth(slackId string) (string, error) {
 	const query = `SELECT * FROM users WHERE slack_id=?`
 	resp := d.db.QueryRow(query, slackId)
 
@@ -77,4 +70,29 @@ func (d *Database) GetUserAuth(slackId string) (string, error) {
 	}
 
 	return token, nil
+}
+
+func (d *Database) CreateUser(slackId, oauthToken string) error {
+	const query = `INSERT INTO users(slack_id, oauth_token) VALUES (?, ?)`
+	_, err := d.db.Exec(query, slackId, oauthToken)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// exec calls db.db.Exec with passed arguments and returns the id of the LastInsertId
+func exec(db *sql.DB, query string, args ...interface{}) (int64, error) {
+	resp, err := db.Exec(query, args...)
+	if err != nil {
+		return 0, errors.Wrapf(err, "unable to exec query: %v", query)
+	}
+
+	id, err := resp.LastInsertId()
+	if err != nil {
+		return 0, errors.Wrapf(err, "unable to get last id after query: %v", query)
+	}
+
+	return id, nil
 }
