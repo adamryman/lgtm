@@ -139,22 +139,7 @@ func (lgtm *LGTM) start(ctx context.Context, token string) {
 				Q(ev.User)
 				Q(watchRequest)
 				repoPart := watchRequest[len(watchRequest)-1]
-				Q(repoPart)
-				scanner := bufio.NewScanner(strings.NewReader(repoPart))
-				scanner.Split(bufio.ScanWords)
-				if !scanner.Scan() {
-					continue
-				}
-
-				repoText := scanner.Text()
-				ownerRepo := strings.Split(repoText, "/")
-				Q(repoText, ownerRepo)
-				if len(ownerRepo) < 2 {
-					continue
-				}
-				owner, repo := ownerRepo[0], ownerRepo[1]
-				Q(owner, repo)
-				lgtm.IncomingEvents <- WatchRepoEvent{User: ev.User, Owner: owner, Repo: repo}
+				go lgtm.handleWatchRequest(ev, repoPart)
 			}
 
 			fmt.Printf("Message: %v\n", ev)
@@ -177,5 +162,23 @@ func (lgtm *LGTM) start(ctx context.Context, token string) {
 			// fmt.Printf("Unexpected: %v\n", msg.Data)
 		}
 	}
+}
 
+func (lgtm *LGTM) handleWatchRequest(msg *slack.MessageEvent, repoPart string) {
+	Q(repoPart)
+	scanner := bufio.NewScanner(strings.NewReader(repoPart))
+	scanner.Split(bufio.ScanWords)
+	if !scanner.Scan() {
+		return
+	}
+
+	repoText := scanner.Text()
+	ownerRepo := strings.Split(repoText, "/")
+	Q(repoText, ownerRepo)
+	if len(ownerRepo) < 2 {
+		return
+	}
+	owner, repo := ownerRepo[0], ownerRepo[1]
+	Q(owner, repo)
+	lgtm.IncomingEvents <- WatchRepoEvent{User: msg.User, Owner: owner, Repo: repo}
 }
