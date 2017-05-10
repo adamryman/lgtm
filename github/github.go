@@ -2,23 +2,18 @@ package github
 
 import (
 	"context"
-	//"fmt"
 	"math"
-	//"math/rand"
 	"net/http"
 	"os"
-	//"strconv"
-	//"time"
 
 	"github.com/google/go-github/github"
-	//"github.com/markbates/goth"
-	gothic "github.com/markbates/goth/gothic"
-	//github_goth "github.com/markbates/goth/providers/github"
 
 	"github.com/gorilla/sessions"
-
+	"github.com/markbates/goth"
+	"github.com/markbates/goth/gothic"
+	github_goth "github.com/markbates/goth/providers/github"
 	"golang.org/x/oauth2"
-	//ogithub "golang.org/x/oauth2/github"
+
 	. "github.com/y0ssar1an/q"
 )
 
@@ -29,7 +24,23 @@ var SlackWebhook string
 func init() {
 	SlackWebhook = os.Getenv("SLACK_WEBHOOK")
 	Q(SlackWebhook)
+}
 
+var IncomingEvents chan interface{}
+
+func init() {
+	IncomingEvents = make(chan interface{})
+}
+
+type PullRequestEvent struct {
+	Id     int
+	Action string
+	URL    string
+}
+
+type AuthenticateEvent struct {
+	SlackId string
+	Token   string
 }
 
 func init() {
@@ -45,33 +56,47 @@ func init() {
 	gothic.Store = store
 }
 
-type auth struct{}
+func init() {
+	clientId := os.Getenv("GITHUB_OAUTH_CLIENT_ID")
+	clientSecret := os.Getenv("GITHUB_OAUTH_CLIENT_SECRET")
+	redirectURL := os.Getenv("GITHUB_OAUTH_REDIRECT")
 
-type AuthServer struct {
+	gothic.GetProviderName = func(req *http.Request) (string, error) { return "github", nil }
+	provider := github_goth.New(clientId, clientSecret, redirectURL, "admin:repo_hook")
+	goth.UseProviders(provider)
 }
 
-//func AuthCallback() http.Handler {
-
-//return
-//}
-
-func ServeHTTPCallback(w http.ResponseWriter, r *http.Request) {
+func AuthenticateCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	user, err := gothic.CompleteUserAuth(w, r)
 	if err != nil {
 		return
 	}
-	_ = user.AccessToken
-	// TODO: Store user.AccessToken, assoitate with user
-	// TODO: Maybe hook in a way to response to user?
+	Q(user)
 
+	// TODO: timeout
+	ae := AuthenticateEvent{
+		SlackId: r.URL.Query().Get("state"),
+		Token:   user.AccessToken,
+	}
+
+	IncomingEvents <- ae
 }
 
-func ServeHTTPAuthenicate(w http.ResponseWriter, r *http.Request) {
+func AuthenicateHandler(w http.ResponseWriter, r *http.Request) {
+	slackId := r.URL.Query().Get("slack_id")
+	Q(slackId)
+	oldQuery := r.URL.Query()
+	oldQuery.Set("state", slackId)
+	r.URL.RawQuery = oldQuery.Encode()
+
+	Q(r.URL.Query().Get("state"))
+	gothic.SetState(r)
+
 	gothic.BeginAuthHandler(w, r)
 }
 
-// Wehook endpoint
-func ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// Wehook endpointu
+func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	//s.webhookSecretKey
 	payload, err := github.ValidatePayload(r, nil)
 	if err != nil {
@@ -84,22 +109,16 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch event := event.(type) {
 	case *github.PullRequestEvent:
 		switch action := event.GetAction(); action {
-		case "open":
-			// To put into slack message
-			event.PullRequest.GetURL()
-			// To store so that when it is closed @lgtm can react to it
-			event.PullRequest.GetID()
-
-		case "closed":
-			//// to find the PR in chat to react to it
-			event.PullRequest.GetID()
-
+		case "open", "closed":
+			// TODO: timeout
+			pre := PullRequestEvent{
+				Id:     event.PullRequest.GetID(),
+				Action: event.GetAction(),
+				URL:    event.PullRequest.GetURL(),
+			}
+			IncomingEvents <- pre
 		}
 	}
-}
-
-type authError struct {
-	err error
 }
 
 func WatchRepo(ctx context.Context, token, owner, repo string) (*github.Hook, error) {
@@ -128,49 +147,3 @@ func WatchRepo(ctx context.Context, token, owner, repo string) (*github.Hook, er
 	hook, _, err := client.Repositories.CreateHook(ctx, owner, repo, req)
 	return hook, err
 }
-
-/*
-func main() {
-	clientId := os.Getenv("GITHUB_OAUTH_CLIENT_ID")
-	clientSecret := os.Getenv("GITHUB_OAUTH_CLIENT_SECRET")
-	redirectURL := os.Getenv("GITHUB_OAUTH_REDIRECT")
-
-	ctx := context.Background()
-	conf := &oauth2.Config{
-		ClientID:     clientId,
-		ClientSecret: clientSecret,
-		Scopes:       []string{"admin:repo_hook"},
-		Endpoint:     ogithub.Endpoint,
-		RedirectURL:  redirectURL,
-	}
-
-	// Redirect user to consent page to ask for permission
-	// for the scopes specified above.
-	//rand.Seed(time.Now().UnixNano())
-	//state := strconv.Atoi(rand.Int())
-	gothic.GetProviderName = func(req *http.Request) (string, error) { return "github", nil }
-	provider := github_goth.New(clientId, clientSecret, redirectURL, "admin:repo_hook")
-	goth.UseProviders(provider)
-
-	// Must get auth token out of database to make a tc
-
-	//client := github.NewClient(tc)
-
-	//// list all repositories for the authenticated user
-	////hooks, _, err := client.Repositories.List(ctx, "adamryman", nil)
-	////hooks, _, err := client.ListServiceHooks(ctx)
-	////_ = err
-	////Q(err)
-
-	////hooks, _, err := client.Repositories.ListHooks(ctx, "adamryman", "kit", nil)
-	//hook, err := WatchRepo(ctx, client, "adamryman", "kit")
-	//if err != nil {
-	//Q(err)
-	//Q("ERROR")
-	//os.Exit(1)
-	//}
-	//Q(hook)
-	//Q(hooks[0])
-
-}
-*/

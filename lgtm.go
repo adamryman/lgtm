@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,10 +18,15 @@ import (
 	. "github.com/y0ssar1an/q"
 )
 
+func init() {
+
+}
+
 func Start() error {
 	database, err := sql.Open(os.Getenv("SQLITE3"))
 	_ = database
 
+	slackWebhook := os.Getenv("SLACK_WEBHOOK")
 	slackToken := os.Getenv("SLACK_API_TOKEN")
 	githubToken := os.Getenv("GITHUB_TOKEN")
 	Q(githubToken)
@@ -43,8 +49,9 @@ func Start() error {
 				lgtm.PostMessage(fmt.Sprintf("someday I will watch `%s` with owner `%s`, <@%s>", ev.Repo, ev.Owner, ev.User))
 				token, err := database.ReadUserAuth(ev.User)
 				if err != nil {
-					lgtm.PostMessage(fmt.Sprintf("You need to authenticate <@%s>. http://home.adamryman.com:5040/authenticate?slack_id=%s", ev.User, ev.User))
-					token = githubToken
+					lgtm.PostMessage(fmt.Sprintf("You need to authorize me <@%s>. http://home.adamryman.com:5040/authorize?slack_id=%s", ev.User, ev.User))
+					//token = githubToken
+					continue
 				}
 				hook, err := github.WatchRepo(ctx, token, ev.Owner, ev.Repo)
 				if err != nil {
@@ -58,8 +65,42 @@ func Start() error {
 		}
 	}()
 
+	// start github handlers
+	go func() {
+		github.SlackWebhook = slackWebhook
+		http.HandleFunc("/authorize", github.AuthenicateHandler)
+		http.HandleFunc("/authorize/callback", github.AuthenticateCallbackHandler)
+		http.HandleFunc("/webhook", github.WebhookHandler)
+		http.ListenAndServe(":5040", nil)
+	}()
+
 	// handle github events
 	go func() {
+		for event := range github.IncomingEvents {
+			switch ev := event.(type) {
+			case github.AuthenticateEvent:
+				err := database.CreateUser(ev.SlackId, ev.Token)
+				if err != nil {
+					Q(err)
+					continue
+				}
+				lgtm.PostMessage(fmt.Sprintf("<@%s> has Authenticated", ev.SlackId))
+			case github.PullRequestEvent:
+				switch ev.Action {
+				case "open":
+					ts, err := lgtm.PostMessage(ev.URL)
+					if err != nil {
+						Q(err)
+						continue
+					}
+					_ = ts
+					// TODO: Store pull request id and timestamp
+				case "close":
+					// TODO: pull out time for pull request id and react to that message
+					//lgtm.ReactPullRequest()
+				}
+			}
+		}
 
 	}()
 
