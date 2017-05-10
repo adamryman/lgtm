@@ -131,9 +131,8 @@ func (lgtm *LGTM) start(ctx context.Context, token string) {
 			if !strings.Contains(text, lgtmID) {
 				continue
 			}
-			searchText := strings.ToLower(ev.Text)
-			Q(searchText)
-			watchRequest := strings.Split(searchText, " watch repo ")
+			// TODO: Make this more robust
+			watchRequest := strings.Split(text, " watch repo ")
 			switch {
 			case len(watchRequest) > 1:
 				Q(ev.User)
@@ -178,6 +177,7 @@ func (lgtm *LGTM) handleWatchRequest(msg *slack.MessageEvent, repoPart string) {
 	if len(ownerRepo) < 2 {
 		return
 	}
+	// TODO: Handle punctuation. "watch repo adamryman/lgtm."
 	owner, repo := ownerRepo[0], ownerRepo[1]
 	Q(owner, repo)
 	lgtm.IncomingEvents <- WatchRepoEvent{User: msg.User, Owner: owner, Repo: repo}
