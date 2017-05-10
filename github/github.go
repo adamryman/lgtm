@@ -120,14 +120,15 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	switch event := event.(type) {
 	case *github.PullRequestEvent:
 		Q(event)
+		Q(event.GetAction())
 		switch action := event.GetAction(); action {
 		case "opened", "closed":
-			Q()
+			Q("PR Opened or closed")
 			// TODO: timeout
 			pre := PullRequestEvent{
 				Id:     event.PullRequest.GetID(),
 				Action: event.GetAction(),
-				URL:    event.PullRequest.GetURL(),
+				URL:    event.PullRequest.GetHTMLURL(),
 			}
 			IncomingEvents <- pre
 			Q("Event sent")

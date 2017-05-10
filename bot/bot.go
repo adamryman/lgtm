@@ -84,6 +84,8 @@ func (lgtm LGTM) PostMessage(msg string) (timestamp string, err error) {
 	pmp.AsUser = true
 	pmp.LinkNames = 1
 	pmp.EscapeText = false
+	pmp.UnfurlLinks = true
+	pmp.UnfurlMedia = true
 	_, timestamp, err = lgtm.api.PostMessage(slackChannel, msg, pmp)
 	return
 }
