@@ -86,8 +86,10 @@ func Start() error {
 				}
 				lgtm.PostMessage(fmt.Sprintf("<@%s> has Authenticated", ev.SlackId))
 			case github.PullRequestEvent:
+				Q("PR Event receieved")
 				switch ev.Action {
-				case "open":
+				case "opened":
+					Q("OpenPREvent")
 					ts, err := lgtm.PostMessage(ev.URL)
 					if err != nil {
 						Q(err)

@@ -106,10 +106,12 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	//if err != nil {
 	//Q(err)
 	//}
+	Q("INCOMING WEBHOOK")
 	payload, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		Q(err)
 	}
+	Q(string(payload))
 	event, err := github.ParseWebHook(github.WebHookType(r), payload)
 	if err != nil {
 		Q(err)
@@ -117,8 +119,10 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch event := event.(type) {
 	case *github.PullRequestEvent:
+		Q(event)
 		switch action := event.GetAction(); action {
-		case "open", "closed":
+		case "opened", "closed":
+			Q()
 			// TODO: timeout
 			pre := PullRequestEvent{
 				Id:     event.PullRequest.GetID(),
@@ -126,6 +130,7 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 				URL:    event.PullRequest.GetURL(),
 			}
 			IncomingEvents <- pre
+			Q("Event sent")
 		}
 	}
 }
