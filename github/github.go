@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"io/ioutil"
 	"math"
 	"net/http"
 	"os"
@@ -98,12 +99,20 @@ func AuthenicateHandler(w http.ResponseWriter, r *http.Request) {
 // Wehook endpointu
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	//s.webhookSecretKey
-	payload, err := github.ValidatePayload(r, nil)
+	// TODO validate payload
+	// https://developer.github.com/webhooks/securing/
+
+	//payload, err := github.ValidatePayload(r, nil)
+	//if err != nil {
+	//Q(err)
+	//}
+	payload, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return
+		Q(err)
 	}
 	event, err := github.ParseWebHook(github.WebHookType(r), payload)
 	if err != nil {
+		Q(err)
 		return
 	}
 	switch event := event.(type) {
