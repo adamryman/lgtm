@@ -1,5 +1,11 @@
 {
 	"comment": "",
+	"heroku": {
+		"goVersion": "go1.8.1",
+		"install": [
+			"./cmd/lgtm-server/"
+		]
+	},
 	"ignore": "test appengine",
 	"package": [
 		{
