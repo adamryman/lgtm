@@ -2,7 +2,6 @@ package bot
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -15,26 +14,22 @@ import (
 	. "github.com/y0ssar1an/q"
 )
 
-const prPartyID = "C3YJF4GP5"
-const playgroundId = "C03LPQF0Y"
-
-var slackChannel = prPartyID
+var debug bool
 
 func init() {
 	Q(os.Getenv("DEBUG"))
 	if len(os.Getenv("DEBUG")) > 0 {
-		slackChannel = playgroundId
+		debug = true
 	}
 }
 
-const lgtmID = "<@U456ZSLSJ>"
-
 type LGTM struct {
-	api                  *slack.Client
-	emoji                string
-	logger               *log.Logger
-	RequestRepoWatchHook func(ctx context.Context, owner, repo string)
-	IncomingEvents       chan interface{}
+	id             string
+	channel        string
+	api            *slack.Client
+	emoji          string
+	logger         *log.Logger
+	IncomingEvents chan interface{}
 }
 
 type WatchRepoEvent struct {
@@ -53,16 +48,12 @@ func SetLogger(logger *log.Logger) LGTMOption {
 	}
 }
 
-func SetRepoWatchHook(hook func(ctx context.Context, owner, repo string)) LGTMOption {
-	return func(o *LGTM) error {
-		o.RequestRepoWatchHook = hook
-		return nil
-	}
-}
-
-func Start(ctx context.Context, token string, options ...LGTMOption) (*LGTM, error) {
+func Start(token, id, channel string, options ...LGTMOption) (*LGTM, error) {
 	lgtm := LGTM{
 		IncomingEvents: make(chan interface{}),
+		id:             id,
+		channel:        channel,
+		emoji:          "white_check_mark",
 	}
 
 	for _, f := range options {
@@ -74,7 +65,7 @@ func Start(ctx context.Context, token string, options ...LGTMOption) (*LGTM, err
 
 	slack.SetLogger(lgtm.logger)
 	lgtm.api = slack.New(token)
-	go lgtm.start(ctx, token)
+	go lgtm.start(token)
 
 	return &lgtm, nil
 }
@@ -86,27 +77,20 @@ func (lgtm LGTM) PostMessage(msg string) (timestamp string, err error) {
 	pmp.EscapeText = false
 	pmp.UnfurlLinks = true
 	pmp.UnfurlMedia = true
-	_, timestamp, err = lgtm.api.PostMessage(slackChannel, msg, pmp)
+	_, timestamp, err = lgtm.api.PostMessage(lgtm.channel, msg, pmp)
 	return
 }
-
-//func (lgtm LGTM) PostPullRequest(url string) (timestamp string, err error) {
-//pmp := slack.NewPostMessageParameters()
-//pmp.AsUser = true
-//_, timestamp, err = lgtm.api.PostMessage(prPartyID, url, pmp)
-//return
-//}
 
 func (lgtm LGTM) ReactPullRequest(timestamp string) error {
 	pmp := slack.NewPostMessageParameters()
 	pmp.AsUser = true
-	itemref := slack.NewRefToMessage(slackChannel, timestamp)
+	itemref := slack.NewRefToMessage(lgtm.channel, timestamp)
 	return lgtm.api.AddReaction(lgtm.emoji, itemref)
 }
 
-func (lgtm *LGTM) start(ctx context.Context, token string) {
+func (lgtm *LGTM) start(token string) {
 
-	lgtm.api.SetDebug(true)
+	lgtm.api.SetDebug(debug)
 
 	rtm := lgtm.api.NewRTM()
 	go rtm.ManageConnection()
@@ -125,46 +109,39 @@ func (lgtm *LGTM) start(ctx context.Context, token string) {
 
 		case *slack.MessageEvent:
 			text := ev.Text
-			if ev.Channel != slackChannel {
+			// Not right channel
+			if ev.Channel != lgtm.channel {
 				continue
 			}
-			if !strings.Contains(text, lgtmID) {
+			// Does not mention @lgtm
+			if !strings.Contains(text, lgtm.id) {
 				continue
 			}
+
 			// TODO: Make this more robust
+			// " watch repo adamryman/lgtm "
 			watchRequest := strings.Split(text, " watch repo ")
 			switch {
 			case len(watchRequest) > 1:
+
 				Q(ev.User)
 				Q(watchRequest)
+
+				// should be "adamryman/lgtm blah blah"
 				repoPart := watchRequest[len(watchRequest)-1]
 				go lgtm.handleWatchRequest(ev, repoPart)
 			}
 
 			fmt.Printf("Message: %v\n", ev)
-
-		case *slack.PresenceChangeEvent:
-			fmt.Printf("Presence Change: %v\n", ev)
-
-		case *slack.LatencyReport:
-			fmt.Printf("Current latency: %v\n", ev.Value)
-
-		case *slack.RTMError:
-			fmt.Printf("Error: %s\n", ev.Error())
-
-		case *slack.InvalidAuthEvent:
-			fmt.Printf("Invalid credentials")
-
-		default:
-
-			// Ignore other events..
-			// fmt.Printf("Unexpected: %v\n", msg.Data)
 		}
 	}
 }
 
 func (lgtm *LGTM) handleWatchRequest(msg *slack.MessageEvent, repoPart string) {
+
 	Q(repoPart)
+
+	// Move to the first "word" space seperated
 	scanner := bufio.NewScanner(strings.NewReader(repoPart))
 	scanner.Split(bufio.ScanWords)
 	if !scanner.Scan() {
@@ -172,13 +149,18 @@ func (lgtm *LGTM) handleWatchRequest(msg *slack.MessageEvent, repoPart string) {
 	}
 
 	repoText := scanner.Text()
+	// Break it by slash to get owner/repo
 	ownerRepo := strings.Split(repoText, "/")
+
 	Q(repoText, ownerRepo)
+
 	if len(ownerRepo) < 2 {
 		return
 	}
 	// TODO: Handle punctuation. "watch repo adamryman/lgtm."
 	owner, repo := ownerRepo[0], ownerRepo[1]
+
 	Q(owner, repo)
+
 	lgtm.IncomingEvents <- WatchRepoEvent{User: msg.User, Owner: owner, Repo: repo}
 }

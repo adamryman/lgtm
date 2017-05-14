@@ -2,13 +2,16 @@ package main
 
 import (
 	"fmt"
-	. "github.com/y0ssar1an/q"
+	"os"
 
 	"github.com/StudentRND/lgtm"
 )
 
+import _ "github.com/joho/godotenv/autoload"
+
 func main() {
-	fmt.Println("You can do anything!")
-	Q("Lets debug some shit")
-	fmt.Println(lgtm.Start())
+	if err := lgtm.Start(lgtm.DefaultConfig); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }

@@ -43,7 +43,7 @@ func setupDB(db *sql.DB) error {
 
 	const pullRequests = `CREATE TABLE IF NOT EXISTS pull_requests(
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-			 	pull_request_id integer,
+				pull_request_id integer,
 				user_id integer,
 				timestamp text);`
 	_, err = db.Exec(pullRequests)

@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -20,11 +21,10 @@ import (
 
 import _ "github.com/joho/godotenv/autoload"
 
-var SlackWebhook string
+var PRWebhook string
 
 func init() {
-	SlackWebhook = os.Getenv("SLACK_WEBHOOK")
-	Q(SlackWebhook)
+	PRWebhook = os.Getenv("PR_WEBHOOK")
 }
 
 var IncomingEvents chan interface{}
@@ -40,8 +40,8 @@ type PullRequestEvent struct {
 }
 
 type AuthenticateEvent struct {
-	SlackId string
-	Token   string
+	Id    string
+	Token string
 }
 
 func init() {
@@ -57,11 +57,7 @@ func init() {
 	gothic.Store = store
 }
 
-func init() {
-	clientId := os.Getenv("GITHUB_OAUTH_CLIENT_ID")
-	clientSecret := os.Getenv("GITHUB_OAUTH_CLIENT_SECRET")
-	redirectURL := os.Getenv("GITHUB_OAUTH_REDIRECT")
-
+func InitAuth(clientId, clientSecret, redirectURL string) {
 	gothic.GetProviderName = func(req *http.Request) (string, error) { return "github", nil }
 	provider := github_goth.New(clientId, clientSecret, redirectURL, "admin:repo_hook")
 	goth.UseProviders(provider)
@@ -76,18 +72,21 @@ func AuthenticateCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: timeout
 	ae := AuthenticateEvent{
-		SlackId: r.URL.Query().Get("state"),
-		Token:   user.AccessToken,
+		Id:    r.URL.Query().Get("state"),
+		Token: user.AccessToken,
 	}
 
 	IncomingEvents <- ae
+	fmt.Fprintln(w, "Go back to slack now plz.")
 }
 
 func AuthenicateHandler(w http.ResponseWriter, r *http.Request) {
-	slackId := r.URL.Query().Get("slack_id")
-	Q(slackId)
+	id := r.URL.Query().Get("id")
+
+	Q(id)
+
 	oldQuery := r.URL.Query()
-	oldQuery.Set("state", slackId)
+	oldQuery.Set("state", id)
 	r.URL.RawQuery = oldQuery.Encode()
 
 	Q(r.URL.Query().Get("state"))
@@ -107,30 +106,36 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	//Q(err)
 	//}
 	Q("INCOMING WEBHOOK")
+
 	payload, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		Q(err)
 	}
+
 	Q(string(payload))
+
 	event, err := github.ParseWebHook(github.WebHookType(r), payload)
 	if err != nil {
 		Q(err)
+
 		return
 	}
+
 	switch event := event.(type) {
 	case *github.PullRequestEvent:
-		Q(event)
-		Q(event.GetAction())
 		switch action := event.GetAction(); action {
 		case "opened", "closed":
+
 			Q("PR Opened or closed")
 			// TODO: timeout
+
 			pre := PullRequestEvent{
 				Id:     event.PullRequest.GetID(),
 				Action: event.GetAction(),
 				URL:    event.PullRequest.GetHTMLURL(),
 			}
 			IncomingEvents <- pre
+
 			Q("Event sent")
 		}
 	}
@@ -145,7 +150,7 @@ func WatchRepo(ctx context.Context, token, owner, repo string) (*github.Hook, er
 		Active: &active,
 		Events: []string{"pull_request"},
 		Config: map[string]interface{}{
-			"url":          SlackWebhook,
+			"url":          PRWebhook,
 			"content_type": "json",
 		},
 	}
